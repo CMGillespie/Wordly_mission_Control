@@ -106,8 +106,10 @@ def index():
             <a href="https://help.wordly.ai/" target="_blank" class="header-link block" style="width: 300px;">
                 <img class="w-full h-auto" src="https://help.wordly.ai/hs-fs/hubfs/Knowledge%20Base%20Graphics/KB%20Header.png?width=667" alt="Knowledge Center">
             </a>
-            <button onclick="logout()" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-black uppercase hover:bg-red-600 transition-colors shadow-sm">
-                Logout
+            <button onclick="logout()" title="Logout" class="bg-slate-900 text-white p-2.5 rounded-lg hover:bg-red-600 transition-colors shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
             </button>
         </div>
     </nav>
@@ -120,6 +122,7 @@ def index():
             <input type="password" id="apiKey" placeholder="Wordly API Key" autocomplete="off" class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 shadow-inner text-base font-mono">
         </div>
         <div class="flex items-center gap-2 px-2"><input type="checkbox" id="filterActive" class="w-5 h-5 cursor-pointer"><label for="filterActive" class="text-sm font-black uppercase cursor-pointer">Live Only</label></div>
+        <div class="flex items-center gap-2 px-2"><input type="checkbox" id="showUnused" class="w-5 h-5 cursor-pointer"><label for="showUnused" class="text-sm font-black uppercase cursor-pointer">Show Unused</label></div>
         <div class="flex gap-4 items-center ml-auto">
             <div class="bg-green-50 border border-green-200 px-4 py-2 rounded-lg text-center"><span class="text-sm font-black text-green-700 uppercase">Active</span><p id="activeCount" class="text-3xl font-black text-green-900 leading-none">0</p></div>
             <div class="bg-white border px-4 py-2 rounded-lg text-center"><span class="text-sm font-black text-slate-500 uppercase">Inactive</span><p id="inactiveCount" class="text-3xl font-black leading-none text-slate-900">0</p></div>
@@ -133,7 +136,7 @@ def index():
     <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
         <table class="w-full text-left" id="sessionTable">
             <thead class="bg-slate-900 text-slate-200 text-sm uppercase font-black tracking-widest">
-                <tr><th class="px-6 py-3">Status</th><th class="px-6 py-3">Session Title</th><th class="px-6 py-3 text-right">Actions</th></tr>
+                <tr><th class="px-2 py-3 w-16">Status</th><th class="px-4 py-3">Session Title</th><th class="px-4 py-3 text-right">Actions</th></tr>
             </thead>
             <tbody id="tableBody" class="divide-y divide-slate-100"></tbody>
         </table>
@@ -207,27 +210,40 @@ def index():
             const body = document.getElementById('tableBody');
             const search = document.getElementById('search').value.toLowerCase();
             const activeOnly = document.getElementById('filterActive').checked;
+            const showUnused = document.getElementById('showUnused').checked;
             const filtered = allSessions.filter(s => {
                 const title = (s.title || "").toLowerCase();
                 const sid = (s.sessionId || "").toLowerCase();
-                const isLive = (s.state || "").toLowerCase() === 'started';
+                const state = (s.state || "").toLowerCase();
+                const isLive = state === 'started';
+                const isCreated = state === 'created';
+                if (isCreated && !showUnused) return false;
                 return (activeOnly ? isLive : true) && (title.includes(search) || sid.includes(search));
+            });
+            filtered.sort((a, b) => {
+                const aCreated = (a.state || "").toLowerCase() === 'created' ? 1 : 0;
+                const bCreated = (b.state || "").toLowerCase() === 'created' ? 1 : 0;
+                return aCreated - bCreated;
             });
             body.innerHTML = filtered.length === 0 ? '<tr><td colspan="3" class="p-10 text-center text-slate-400 italic font-bold uppercase tracking-widest text-lg">No matching sessions.</td></tr>' : '';
             filtered.forEach(s => {
-                const isLive = (s.state || "").toLowerCase() === 'started';
+                const state = (s.state || "").toLowerCase();
+                const isLive = state === 'started';
+                const isCreated = state === 'created';
+                const badgeClass = isLive ? 'bg-green-100 text-green-700' : (isCreated ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500');
+                const badgeText = isLive ? 'LIVE' : (s.state || "").toUpperCase();
                 const row = `
                     <tr class="${isLive ? 'active-row' : ''}">
-                        <td class="px-6 py-4">
-                            <span class="px-2 py-0.5 rounded text-sm font-black ${isLive ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-600'}">
-                                ${isLive ? 'LIVE' : (s.state || "").toUpperCase()}
+                        <td class="px-2 py-4">
+                            <span class="px-1.5 py-0.5 rounded text-xs font-black ${badgeClass}">
+                                ${badgeText}
                             </span>
                         </td>
-                        <td class="px-6 py-4">
+                        <td class="px-4 py-4">
                             <div class="font-bold text-lg text-slate-900">${s.title || 'Untitled'}</div>
                             <div class="text-sm text-blue-600 font-mono mt-1 uppercase tracking-tight">ID: ${s.sessionId} | PASS: ${s.passcode}</div>
                         </td>
-                        <td class="px-6 py-4 text-right whitespace-nowrap">
+                        <td class="px-4 py-4 text-right whitespace-nowrap">
                             <a href="https://attend.wordly.ai/enter/${s.sessionId}" target="_blank" class="text-blue-600 text-sm font-black uppercase tracking-tighter hover:underline">Attend</a>
                             <a href="https://join.wordly.ai/enter/${s.sessionId}?key=${s.passcode}" target="_blank" class="bg-slate-900 text-white px-2 py-1.5 rounded text-sm font-black uppercase tracking-tighter hover:bg-blue-600 ml-3">Present</a>
                             ${isLive ? `<button onclick="endSession('${s.sessionId}', '${s.passcode}')" class="border-2 border-red-600 text-red-600 px-2 py-1 rounded text-sm font-black uppercase ml-3 hover:bg-red-600 hover:text-white transition-all">End Session</button>` : ''}
