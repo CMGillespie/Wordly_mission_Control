@@ -74,7 +74,9 @@ def index():
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8"><title>Wordly Mission Control</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wordly Mission Control</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .active-row { background-color: rgba(34, 197, 94, 0.08); border-left: 4px solid #16a34a; }
@@ -128,7 +130,7 @@ def index():
         </div>
     </header>
 
-    <div class="overflow-hidden border border-slate-200 rounded-xl bg-white shadow-sm">
+    <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
         <table class="w-full text-left" id="sessionTable">
             <thead class="bg-slate-900 text-slate-200 text-sm uppercase font-black tracking-widest">
                 <tr><th class="px-6 py-3">Status</th><th class="px-6 py-3">Session Title</th><th class="px-6 py-3 text-right">Actions</th></tr>
