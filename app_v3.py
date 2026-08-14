@@ -118,8 +118,16 @@ def index():
         <div class="w-full md:w-1/3">
             <input type="text" id="search" placeholder="Search Title or ID..." class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 shadow-inner text-base">
         </div>
-        <div class="w-full md:w-1/4">
-            <input type="password" id="apiKey" placeholder="Wordly API Key" autocomplete="off" class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 shadow-inner text-base font-mono">
+        <div class="relative">
+            <button type="button" onclick="toggleApiKeyPopover(event)" title="Wordly API Key" class="relative bg-white border p-2.5 rounded-lg shadow-inner hover:bg-slate-50">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                <span id="apiKeyDot" class="hidden absolute top-1 right-1 h-2 w-2 rounded-full bg-green-500"></span>
+            </button>
+            <div id="apiKeyPopover" class="hidden absolute left-0 mt-2 z-50 bg-white border shadow-lg rounded-lg p-3" style="width: 260px;">
+                <input type="password" id="apiKey" placeholder="Wordly API Key" autocomplete="off" class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 shadow-inner text-base font-mono">
+            </div>
         </div>
         <div class="flex items-center gap-2 px-2"><input type="checkbox" id="filterActive" class="w-5 h-5 cursor-pointer"><label for="filterActive" class="text-sm font-black uppercase cursor-pointer">Live Only</label></div>
         <div class="flex items-center gap-2 px-2"><input type="checkbox" id="showUnused" class="w-5 h-5 cursor-pointer"><label for="showUnused" class="text-sm font-black uppercase cursor-pointer">Show Unused</label></div>
@@ -151,9 +159,28 @@ def index():
             return sessionStorage.getItem('wordlyApiKey') || '';
         }
 
+        function updateApiKeyDot() {
+            document.getElementById('apiKeyDot').classList.toggle('hidden', !getApiKey());
+        }
+
+        function toggleApiKeyPopover(e) {
+            e.stopPropagation();
+            document.getElementById('apiKeyPopover').classList.toggle('hidden');
+        }
+
+        document.addEventListener('click', (e) => {
+            const popover = document.getElementById('apiKeyPopover');
+            if (!popover.classList.contains('hidden') && !popover.contains(e.target)) {
+                popover.classList.add('hidden');
+            }
+        });
+
         document.getElementById('apiKey').value = getApiKey();
+        updateApiKeyDot();
         document.getElementById('apiKey').addEventListener('change', (e) => {
             sessionStorage.setItem('wordlyApiKey', e.target.value.trim());
+            updateApiKeyDot();
+            document.getElementById('apiKeyPopover').classList.add('hidden');
             fetchData();
         });
 
@@ -187,10 +214,17 @@ def index():
         function logout() {
             if (!confirm("Log out and clear your saved API key?")) return;
             sessionStorage.removeItem('wordlyApiKey');
-            document.getElementById('apiKey').value = '';
-            allSessions = [];
-            updateCounters(true);
-            fetchData();
+            location.reload();
+        }
+
+        function scheduleMidnightClear() {
+            const now = new Date();
+            const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
+            const msUntilMidnight = nextMidnight - now;
+            setTimeout(() => {
+                sessionStorage.removeItem('wordlyApiKey');
+                location.reload();
+            }, msUntilMidnight);
         }
 
         function updateCounters(isError = false) {
@@ -272,7 +306,7 @@ def index():
         function manualRefresh() { fetchData(); startTimer(); }
         document.getElementById('search').addEventListener('input', render);
         document.getElementById('filterActive').addEventListener('change', render);
-        fetchData(); startTimer();
+        fetchData(); startTimer(); scheduleMidnightClear();
     </script>
 </body>
 </html>
