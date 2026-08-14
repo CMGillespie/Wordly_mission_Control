@@ -178,6 +178,21 @@ def index():
         </div>
         <div class="flex items-center gap-2 px-2"><input type="checkbox" id="filterActive" class="w-5 h-5 cursor-pointer"><label for="filterActive" class="text-sm font-black uppercase cursor-pointer">Live Only</label></div>
         <div class="flex items-center gap-2 px-2"><input type="checkbox" id="showUnused" class="w-5 h-5 cursor-pointer"><label for="showUnused" class="text-sm font-black uppercase cursor-pointer">Show Unused</label></div>
+        <div class="flex items-center gap-2">
+            <button id="btn-split" onclick="armOrFire('split')" class="flex items-center gap-1.5 border px-3 py-2 rounded-lg text-xs font-bold uppercase bg-white hover:bg-slate-50">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+                    <path d="M14 12H16M2 12H4M20 12H22M3 23C3 22.7374 3.05173 17.4773 3.15224 17.2346C3.25275 16.992 3.40007 16.7715 3.58579 16.5858C3.7715 16.4001 3.99198 16.2528 4.23463 16.1522C4.47728 16.0517 4.73736 16 5 16H19C19.2626 16 19.5227 16.0517 19.7654 16.1522C20.008 16.2528 20.2285 16.4001 20.4142 16.5858C20.5999 16.7715 20.7472 16.992 20.8478 17.2346C20.9483 17.4773 21 22.7374 21 23M3 1V6C3 6.53043 3.21071 7.03914 3.58579 7.41421C3.96086 7.78929 4.46957 8 5 8H19C19.5304 8 20.0391 7.78929 20.4142 7.41421C20.7893 7.03914 21 6.53043 21 6V1M8 12H10"/>
+                </svg>
+                <span id="btn-split-label">Split</span>
+            </button>
+            <button id="btn-end" onclick="armOrFire('end')" class="flex items-center gap-1.5 border px-3 py-2 rounded-lg text-xs font-bold uppercase bg-white hover:bg-slate-50">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                <span id="btn-end-label">End</span>
+            </button>
+            <button id="btn-cancel-mode" onclick="cancelMode()" class="hidden text-slate-500 hover:text-slate-800 px-2 text-lg font-black" title="Cancel">&times;</button>
+        </div>
         <div class="flex gap-4 items-center ml-auto">
             <div class="bg-green-50 border border-green-200 px-4 py-2 rounded-lg text-center"><span class="text-sm font-black text-green-700 uppercase">Active</span><p id="activeCount" class="text-3xl font-black text-green-900 leading-none">0</p></div>
             <div class="bg-white border px-4 py-2 rounded-lg text-center"><span class="text-sm font-black text-slate-500 uppercase">Inactive</span><p id="inactiveCount" class="text-3xl font-black leading-none text-slate-900">0</p></div>
@@ -187,24 +202,6 @@ def index():
             </div>
         </div>
     </header>
-
-    <div id="bulkToolbar" class="hidden mb-3 flex items-center gap-3 bg-slate-900 text-white px-4 py-2 rounded-xl">
-        <span id="bulkCount" class="text-sm font-black uppercase">0 selected</span>
-        <div class="flex gap-2 ml-auto">
-            <button onclick="bulkSplit()" title="Split Transcript" class="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
-                    <path d="M14 12H16M2 12H4M20 12H22M3 23C3 22.7374 3.05173 17.4773 3.15224 17.2346C3.25275 16.992 3.40007 16.7715 3.58579 16.5858C3.7715 16.4001 3.99198 16.2528 4.23463 16.1522C4.47728 16.0517 4.73736 16 5 16H19C19.2626 16 19.5227 16.0517 19.7654 16.1522C20.008 16.2528 20.2285 16.4001 20.4142 16.5858C20.5999 16.7715 20.7472 16.992 20.8478 17.2346C20.9483 17.4773 21 22.7374 21 23M3 1V6C3 6.53043 3.21071 7.03914 3.58579 7.41421C3.96086 7.78929 4.46957 8 5 8H19C19.5304 8 20.0391 7.78929 20.4142 7.41421C20.7893 7.03914 21 6.53043 21 6V1M8 12H10"/>
-                </svg>
-                Split
-            </button>
-            <button onclick="bulkEnd()" title="End Session" class="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-                </svg>
-                End
-            </button>
-        </div>
-    </div>
 
     <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
         <table class="w-full text-left" id="sessionTable">
@@ -306,6 +303,7 @@ def index():
         }
 
         let selectedSessions = {}; // sessionId -> passcode, for bulk actions
+        let armMode = null; // null | 'split' | 'end'
 
         function labelText(s) {
             const parts = [];
@@ -321,6 +319,12 @@ def index():
             const search = document.getElementById('search').value.toLowerCase();
             const activeOnly = document.getElementById('filterActive').checked;
             const showUnused = document.getElementById('showUnused').checked;
+
+            // Prune any selection whose session is no longer live (ended elsewhere,
+            // via the per-row button, the portal, etc.)
+            const liveIds = new Set(allSessions.filter(s => (s.state || "").toLowerCase() === 'started').map(s => s.sessionId));
+            Object.keys(selectedSessions).forEach(id => { if (!liveIds.has(id)) delete selectedSessions[id]; });
+
             const filtered = allSessions.filter(s => {
                 const title = (s.title || "").toLowerCase();
                 const sid = (s.sessionId || "").toLowerCase();
@@ -350,7 +354,7 @@ def index():
                 const row = `
                     <tr class="${isLive ? 'active-row' : ''}">
                         <td class="px-2 py-4">
-                            ${isLive ? `<input type="checkbox" ${isChecked} onchange="toggleSelect('${s.sessionId}', '${s.passcode}', this)" class="w-4 h-4 cursor-pointer">` : ''}
+                            ${(armMode && isLive) ? `<input type="checkbox" ${isChecked} onchange="toggleSelect('${s.sessionId}', '${s.passcode}', this)" class="w-4 h-4 cursor-pointer">` : ''}
                         </td>
                         <td class="px-2 py-4">
                             <span class="px-1.5 py-0.5 rounded text-xs font-black ${badgeClass}">
@@ -370,6 +374,7 @@ def index():
                     </tr>`;
                 body.insertAdjacentHTML('beforeend', row);
             });
+            updateModeUI();
         }
 
         function toggleLabel(el) {
@@ -398,7 +403,7 @@ def index():
         function toggleSelect(id, pass, el) {
             if (el.checked) selectedSessions[id] = pass;
             else delete selectedSessions[id];
-            updateBulkToolbar();
+            updateModeUI();
         }
 
         function toggleSelectAllLive(el) {
@@ -408,33 +413,50 @@ def index():
             });
         }
 
-        function updateBulkToolbar() {
+        function updateModeUI() {
             const count = Object.keys(selectedSessions).length;
-            document.getElementById('bulkToolbar').classList.toggle('hidden', count === 0);
-            document.getElementById('bulkCount').textContent = `${count} selected`;
+            const splitBtn   = document.getElementById('btn-split');
+            const endBtn     = document.getElementById('btn-end');
+            const splitLabel = document.getElementById('btn-split-label');
+            const endLabel   = document.getElementById('btn-end-label');
+            const cancelBtn  = document.getElementById('btn-cancel-mode');
+
+            const baseClass = 'flex items-center gap-1.5 border px-3 py-2 rounded-lg text-xs font-bold uppercase';
+            splitBtn.className = `${baseClass} ${armMode === 'split' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white hover:bg-slate-50'} ${armMode === 'end' ? 'opacity-40 pointer-events-none' : ''}`;
+            endBtn.className   = `${baseClass} ${armMode === 'end' ? 'bg-red-600 text-white border-red-600' : 'bg-white hover:bg-slate-50'} ${armMode === 'split' ? 'opacity-40 pointer-events-none' : ''}`;
+
+            splitLabel.textContent = armMode === 'split' ? `Split (${count})` : 'Split';
+            endLabel.textContent   = armMode === 'end'   ? `End (${count})`   : 'End';
+
+            cancelBtn.classList.toggle('hidden', armMode === null);
         }
 
-        async function bulkEnd() {
-            const ids = Object.keys(selectedSessions);
-            if (!ids.length) return;
-            if (!confirmAction(`End ${ids.length} live session(s) for everyone?`)) return;
-            for (const id of ids) {
-                await fetch("/api/sessions/end/" + id + "?passcode=" + selectedSessions[id], { method: "POST" });
-            }
+        function cancelMode() {
+            armMode = null;
             selectedSessions = {};
-            updateBulkToolbar();
-            fetchData();
+            render();
         }
 
-        async function bulkSplit() {
-            const ids = Object.keys(selectedSessions);
-            if (!ids.length) return;
-            if (!confirmAction(`Split the transcript for ${ids.length} session(s)?`)) return;
-            for (const id of ids) {
-                await fetch("/api/sessions/split/" + id + "?passcode=" + selectedSessions[id], { method: "POST" });
+        async function armOrFire(mode) {
+            if (armMode === null) {
+                armMode = mode;
+                document.getElementById('filterActive').checked = true;
+                render();
+                return;
             }
+            if (armMode !== mode) return; // other action is armed; this button is disabled anyway
+
+            const ids = Object.keys(selectedSessions);
+            if (!ids.length) { cancelMode(); return; }
+
+            const verb = mode === 'split' ? `Split the transcript for ${ids.length} session(s)?` : `End ${ids.length} session(s) for everyone?`;
+            if (!confirmAction(verb)) return;
+
+            for (const id of ids) {
+                await fetch(`/api/sessions/${mode}/${id}?passcode=${selectedSessions[id]}`, { method: 'POST' });
+            }
+            armMode = null;
             selectedSessions = {};
-            updateBulkToolbar();
             fetchData();
         }
 
