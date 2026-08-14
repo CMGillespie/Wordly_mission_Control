@@ -1,5 +1,8 @@
 # app_v3.py
-# Version: 3.1.4a - pending test: masked API key field (sessionStorage), Logout replaces Shutdown, 2x font sizing, blue ID/Pass line
+# Version: 3.1.4b - pending test: full pagination loop on /sessions, label/custom-field search
+#                    + truncated display, Split Transcript endpoint (WSS "split", confirmed
+#                    working via bystander connect), bulk select + Split/End toolbar,
+#                    simplified "asdf" confirm on End/Split
 # Discovery: REST 1.11.0 | Termination: Endpoint Services 1.3
 
 import os, subprocess, json, asyncio, webbrowser, signal, sys
@@ -14,15 +17,30 @@ WS_ENDPOINT = "wss://endpoint.wordly.ai/session"
 
 @app.route('/api/sessions')
 def get_sessions():
-    """Discovery via REST v1.11.0. API key now comes from the browser (masked field), not a file."""
+    """Discovery via REST v1.11.0. API key now comes from the browser (masked field), not a file.
+    Wordly paginates /sessions at a default of 10/page — loop pages (limit=100 each) using the
+    response's "total" field until every session has been collected."""
     key = request.headers.get('X-Wordly-Api-Key')
     if not key:
         return jsonify({"error": "MISSING_KEY"}), 401
 
     try:
-        cmd = ['curl', '-s', '-H', f'x-wordly-api-key: {key}', f'{REST_BASE}/sessions']
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        return result.stdout if result.stdout else jsonify({"sessions": []})
+        all_sessions = []
+        page = 1
+        while True:
+            cmd = ['curl', '-s', '-H', f'x-wordly-api-key: {key}',
+                   f'{REST_BASE}/sessions?page={page}&limit=100']
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if not result.stdout:
+                break
+            data = json.loads(result.stdout)
+            sessions = data.get('sessions', [])
+            all_sessions.extend(sessions)
+            total = data.get('total', len(all_sessions))
+            if not sessions or len(all_sessions) >= total:
+                break
+            page += 1
+        return jsonify({"sessions": all_sessions})
     except Exception as e:
         return jsonify({"error": "CMD_FAILED", "message": str(e)}), 500
 
@@ -64,6 +82,35 @@ def end_session_action(session_id):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         success = loop.run_until_complete(ws_kill_logic(session_id, passcode))
+        return jsonify({"status": "success" if success else "failed"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+async def ws_split_logic(session_id, passcode):
+    """Sends {"type":"split"} over a bystander connect (no audio needed) —
+    confirmed working via Endpoint Services even without a full connect handshake."""
+    import websockets
+    try:
+        async with websockets.connect(WS_ENDPOINT) as ws:
+            await ws.send(json.dumps({
+                "type": "connect",
+                "presentationCode": session_id,
+                "accessKey": passcode
+            }))
+            await ws.recv()
+            await ws.send(json.dumps({"type": "split"}))
+            return True
+    except Exception as e:
+        print(f"WS SPLIT ERROR: {e}")
+        return False
+
+@app.route('/api/sessions/split/<session_id>', methods=['POST'])
+def split_session_action(session_id):
+    passcode = request.args.get('passcode')
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        success = loop.run_until_complete(ws_split_logic(session_id, passcode))
         return jsonify({"status": "success" if success else "failed"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -116,7 +163,7 @@ def index():
 
     <header class="mb-3 flex flex-wrap gap-4 items-center bg-slate-100 p-2 rounded-xl border border-slate-200">
         <div class="w-full md:w-1/3">
-            <input type="text" id="search" placeholder="Search Title or ID..." class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 shadow-inner text-base">
+            <input type="text" id="search" placeholder="Search Title, ID, or Label..." class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 shadow-inner text-base">
         </div>
         <div class="relative">
             <button type="button" onclick="toggleApiKeyPopover(event)" title="Wordly API Key" class="relative bg-white border p-2.5 rounded-lg shadow-inner hover:bg-slate-50">
@@ -141,10 +188,28 @@ def index():
         </div>
     </header>
 
+    <div id="bulkToolbar" class="hidden mb-3 flex items-center gap-3 bg-slate-900 text-white px-4 py-2 rounded-xl">
+        <span id="bulkCount" class="text-sm font-black uppercase">0 selected</span>
+        <div class="flex gap-2 ml-auto">
+            <button onclick="bulkSplit()" title="Split Transcript" class="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+                    <path d="M14 12H16M2 12H4M20 12H22M3 23C3 22.7374 3.05173 17.4773 3.15224 17.2346C3.25275 16.992 3.40007 16.7715 3.58579 16.5858C3.7715 16.4001 3.99198 16.2528 4.23463 16.1522C4.47728 16.0517 4.73736 16 5 16H19C19.2626 16 19.5227 16.0517 19.7654 16.1522C20.008 16.2528 20.2285 16.4001 20.4142 16.5858C20.5999 16.7715 20.7472 16.992 20.8478 17.2346C20.9483 17.4773 21 22.7374 21 23M3 1V6C3 6.53043 3.21071 7.03914 3.58579 7.41421C3.96086 7.78929 4.46957 8 5 8H19C19.5304 8 20.0391 7.78929 20.4142 7.41421C20.7893 7.03914 21 6.53043 21 6V1M8 12H10"/>
+                </svg>
+                Split
+            </button>
+            <button onclick="bulkEnd()" title="End Session" class="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                End
+            </button>
+        </div>
+    </div>
+
     <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
         <table class="w-full text-left" id="sessionTable">
             <thead class="bg-slate-900 text-slate-200 text-sm uppercase font-black tracking-widest">
-                <tr><th class="px-2 py-3 w-16">Status</th><th class="px-4 py-3">Session Title</th><th class="px-4 py-3 text-right">Actions</th></tr>
+                <tr><th class="px-2 py-3 w-10"><input type="checkbox" id="selectAllLive" onclick="toggleSelectAllLive(this)" class="w-4 h-4 cursor-pointer"></th><th class="px-2 py-3 w-16">Status</th><th class="px-4 py-3">Session Title</th><th class="px-4 py-3 text-right">Actions</th></tr>
             </thead>
             <tbody id="tableBody" class="divide-y divide-slate-100"></tbody>
         </table>
@@ -194,7 +259,7 @@ def index():
                 const data = await res.json();
 
                 if (data.error === "MISSING_KEY") {
-                    body.innerHTML = `<tr><td colspan="3" class="p-10 text-center bg-red-50 text-red-600 font-bold border-2 border-red-200 rounded-xl text-lg">
+                    body.innerHTML = `<tr><td colspan="4" class="p-10 text-center bg-red-50 text-red-600 font-bold border-2 border-red-200 rounded-xl text-lg">
                         Enter your Wordly API key above to load sessions.
                     </td></tr>`;
                     updateCounters(true);
@@ -206,7 +271,7 @@ def index():
                 updateCounters(); render();
             } catch (e) {
                 console.error("Sync Error:", e);
-                body.innerHTML = '<tr><td colspan="3" class="p-10 text-center text-red-400 font-bold italic uppercase tracking-widest text-lg">Sync Error. Check Connection.</td></tr>';
+                body.innerHTML = '<tr><td colspan="4" class="p-10 text-center text-red-400 font-bold italic uppercase tracking-widest text-lg">Sync Error. Check Connection.</td></tr>';
             }
             if(icon) icon.classList.remove('refreshing');
         }
@@ -240,6 +305,17 @@ def index():
             document.title = (active > 0 ? `(${active}) ` : '') + "Wordly Mission Control";
         }
 
+        let selectedSessions = {}; // sessionId -> passcode, for bulk actions
+
+        function labelText(s) {
+            const parts = [];
+            if (s.label) parts.push(s.label);
+            (s.labels || []).forEach(f => {
+                if (f && f.name) parts.push(f.value ? `${f.name}: ${f.value}` : f.name);
+            });
+            return parts.join(' · ');
+        }
+
         function render() {
             const body = document.getElementById('tableBody');
             const search = document.getElementById('search').value.toLowerCase();
@@ -248,26 +324,34 @@ def index():
             const filtered = allSessions.filter(s => {
                 const title = (s.title || "").toLowerCase();
                 const sid = (s.sessionId || "").toLowerCase();
+                const labels = labelText(s).toLowerCase();
                 const state = (s.state || "").toLowerCase();
                 const isLive = state === 'started';
                 const isCreated = state === 'created';
                 if (isCreated && !showUnused) return false;
-                return (activeOnly ? isLive : true) && (title.includes(search) || sid.includes(search));
+                return (activeOnly ? isLive : true) && (title.includes(search) || sid.includes(search) || labels.includes(search));
             });
             filtered.sort((a, b) => {
                 const aCreated = (a.state || "").toLowerCase() === 'created' ? 1 : 0;
                 const bCreated = (b.state || "").toLowerCase() === 'created' ? 1 : 0;
                 return aCreated - bCreated;
             });
-            body.innerHTML = filtered.length === 0 ? '<tr><td colspan="3" class="p-10 text-center text-slate-400 italic font-bold uppercase tracking-widest text-lg">No matching sessions.</td></tr>' : '';
+            body.innerHTML = filtered.length === 0 ? '<tr><td colspan="4" class="p-10 text-center text-slate-400 italic font-bold uppercase tracking-widest text-lg">No matching sessions.</td></tr>' : '';
             filtered.forEach(s => {
                 const state = (s.state || "").toLowerCase();
                 const isLive = state === 'started';
                 const isCreated = state === 'created';
                 const badgeClass = isLive ? 'bg-green-100 text-green-700' : (isCreated ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500');
                 const badgeText = isLive ? 'LIVE' : (s.state || "").toUpperCase();
+                const full = labelText(s);
+                const truncated = full.length > 42 ? full.slice(0, 42) + '…' : full;
+                const labelRow = full ? `<div class="text-xs text-slate-500 mt-1 cursor-pointer" onclick="toggleLabel(this)" data-full="${full.replace(/"/g,'&quot;')}" data-expanded="false">${truncated}</div>` : '';
+                const isChecked = selectedSessions[s.sessionId] ? 'checked' : '';
                 const row = `
                     <tr class="${isLive ? 'active-row' : ''}">
+                        <td class="px-2 py-4">
+                            ${isLive ? `<input type="checkbox" ${isChecked} onchange="toggleSelect('${s.sessionId}', '${s.passcode}', this)" class="w-4 h-4 cursor-pointer">` : ''}
+                        </td>
                         <td class="px-2 py-4">
                             <span class="px-1.5 py-0.5 rounded text-xs font-black ${badgeClass}">
                                 ${badgeText}
@@ -276,6 +360,7 @@ def index():
                         <td class="px-4 py-4">
                             <div class="font-bold text-lg text-slate-900">${s.title || 'Untitled'}</div>
                             <div class="text-sm text-blue-600 font-mono mt-1 uppercase tracking-tight">ID: ${s.sessionId} | PASS: ${s.passcode}</div>
+                            ${labelRow}
                         </td>
                         <td class="px-4 py-4 text-right whitespace-nowrap">
                             <a href="https://attend.wordly.ai/enter/${s.sessionId}" target="_blank" class="text-blue-600 text-sm font-black uppercase tracking-tighter hover:underline">Attend</a>
@@ -287,12 +372,70 @@ def index():
             });
         }
 
-        async function endSession(id, pass) {
-            const check = prompt("To END this live session for everyone, type the Session ID (" + id + "):");
-            if (check === id) {
-                await fetch("/api/sessions/end/" + id + "?passcode=" + pass, { method: "POST" });
-                fetchData();
+        function toggleLabel(el) {
+            const full = el.dataset.full;
+            const expanded = el.dataset.expanded === 'true';
+            if (expanded) {
+                el.textContent = full.length > 42 ? full.slice(0, 42) + '…' : full;
+                el.dataset.expanded = 'false';
+            } else {
+                el.textContent = full;
+                el.dataset.expanded = 'true';
             }
+        }
+
+        function confirmAction(promptText) {
+            const check = prompt(promptText + ' Type "asdf" to confirm:');
+            return (check || '').trim().toLowerCase() === 'asdf';
+        }
+
+        async function endSession(id, pass) {
+            if (!confirmAction(`End the live session ${id} for everyone?`)) return;
+            await fetch("/api/sessions/end/" + id + "?passcode=" + pass, { method: "POST" });
+            fetchData();
+        }
+
+        function toggleSelect(id, pass, el) {
+            if (el.checked) selectedSessions[id] = pass;
+            else delete selectedSessions[id];
+            updateBulkToolbar();
+        }
+
+        function toggleSelectAllLive(el) {
+            document.querySelectorAll('#tableBody input[type=checkbox]').forEach(cb => {
+                cb.checked = el.checked;
+                cb.dispatchEvent(new Event('change'));
+            });
+        }
+
+        function updateBulkToolbar() {
+            const count = Object.keys(selectedSessions).length;
+            document.getElementById('bulkToolbar').classList.toggle('hidden', count === 0);
+            document.getElementById('bulkCount').textContent = `${count} selected`;
+        }
+
+        async function bulkEnd() {
+            const ids = Object.keys(selectedSessions);
+            if (!ids.length) return;
+            if (!confirmAction(`End ${ids.length} live session(s) for everyone?`)) return;
+            for (const id of ids) {
+                await fetch("/api/sessions/end/" + id + "?passcode=" + selectedSessions[id], { method: "POST" });
+            }
+            selectedSessions = {};
+            updateBulkToolbar();
+            fetchData();
+        }
+
+        async function bulkSplit() {
+            const ids = Object.keys(selectedSessions);
+            if (!ids.length) return;
+            if (!confirmAction(`Split the transcript for ${ids.length} session(s)?`)) return;
+            for (const id of ids) {
+                await fetch("/api/sessions/split/" + id + "?passcode=" + selectedSessions[id], { method: "POST" });
+            }
+            selectedSessions = {};
+            updateBulkToolbar();
+            fetchData();
         }
 
         function startTimer() {
@@ -306,6 +449,7 @@ def index():
         function manualRefresh() { fetchData(); startTimer(); }
         document.getElementById('search').addEventListener('input', render);
         document.getElementById('filterActive').addEventListener('change', render);
+        document.getElementById('showUnused').addEventListener('change', render);
         fetchData(); startTimer(); scheduleMidnightClear();
     </script>
 </body>
