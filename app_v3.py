@@ -431,15 +431,19 @@ def index():
             cancelBtn.classList.toggle('hidden', armMode === null);
         }
 
+        let prevLiveOnly = false; // Live Only state before arming, restored on cancel/completion
+
         function cancelMode() {
             armMode = null;
             selectedSessions = {};
+            document.getElementById('filterActive').checked = prevLiveOnly;
             render();
         }
 
         async function armOrFire(mode) {
             if (armMode === null) {
                 armMode = mode;
+                prevLiveOnly = document.getElementById('filterActive').checked;
                 document.getElementById('filterActive').checked = true;
                 render();
                 return;
@@ -457,6 +461,7 @@ def index():
             }
             armMode = null;
             selectedSessions = {};
+            document.getElementById('filterActive').checked = prevLiveOnly;
             fetchData();
         }
 
