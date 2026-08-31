@@ -178,7 +178,6 @@ def index():
                 <input type="password" id="apiKey" placeholder="Wordly API Key" autocomplete="off" class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 shadow-inner text-base font-mono">
             </div>
         </div>
-        <div class="flex items-center gap-2 px-2"><input type="checkbox" id="showUnused" class="w-5 h-5 cursor-pointer"><label for="showUnused" class="text-sm font-black uppercase cursor-pointer">Show Unused</label></div>
         <div class="flex items-center gap-2 px-2"><input type="checkbox" id="alertDrops" class="w-5 h-5 cursor-pointer"><label for="alertDrops" class="text-sm font-black uppercase cursor-pointer">Alert Drops</label></div>
         <div class="flex items-center gap-2">
             <button id="btn-split" onclick="armOrFire('split')" class="flex items-center gap-1.5 border px-3 py-2 rounded-lg text-xs font-bold uppercase bg-white hover:bg-slate-50">
@@ -196,8 +195,13 @@ def index():
             <button id="btn-cancel-mode" onclick="cancelMode()" class="hidden text-slate-500 hover:text-slate-800 px-2 text-lg font-black" title="Cancel">&times;</button>
         </div>
         <div class="flex gap-4 items-center ml-auto">
-            <div id="activeBox" onclick="toggleStatusFilter('active')" class="cursor-pointer bg-green-50 border border-green-200 px-4 py-2 rounded-lg text-center transition-all"><span class="text-sm font-black text-green-700 uppercase">Active</span><p id="activeCount" class="text-3xl font-black text-green-900 leading-none">0</p></div>
-            <div id="inactiveBox" onclick="toggleStatusFilter('inactive')" class="cursor-pointer bg-white border px-4 py-2 rounded-lg text-center transition-all"><span class="text-sm font-black text-slate-500 uppercase">Inactive</span><p id="inactiveCount" class="text-3xl font-black leading-none text-slate-900">0</p></div>
+            <div class="flex flex-col items-center">
+                <span class="text-[10px] font-bold text-blue-600 uppercase mb-1">Click to filter by Active or Inactive</span>
+                <div class="flex gap-4 border-2 border-dashed border-blue-400 rounded-lg p-2">
+                    <div id="activeBox" onclick="toggleStatusFilter('active')" class="cursor-pointer bg-green-50 border border-green-200 px-4 py-2 rounded-lg text-center transition-all"><span class="text-sm font-black text-green-700 uppercase">Active</span><p id="activeCount" class="text-3xl font-black text-green-900 leading-none">0</p></div>
+                    <div id="inactiveBox" onclick="toggleStatusFilter('inactive')" class="cursor-pointer bg-white border px-4 py-2 rounded-lg text-center transition-all"><span class="text-sm font-black text-slate-500 uppercase">Inactive</span><p id="inactiveCount" class="text-3xl font-black leading-none text-slate-900">0</p></div>
+                </div>
+            </div>
             <div class="flex flex-col items-center pl-4 border-l">
                 <span id="timerText" class="text-sm font-mono font-bold text-slate-400">SYNC: 30S</span>
                 <button onclick="manualRefresh()" class="bg-blue-600 text-white p-2 rounded-full shadow-md"><svg id="refreshIcon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
@@ -210,7 +214,17 @@ def index():
     <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
         <table class="w-full text-left" id="sessionTable">
             <thead class="bg-slate-900 text-slate-200 text-sm uppercase font-black tracking-widest">
-                <tr><th class="px-2 py-3 w-10"><input type="checkbox" id="selectAllLive" onclick="toggleSelectAllLive(this)" class="w-4 h-4 cursor-pointer"></th><th class="px-2 py-3 w-16">Status</th><th class="px-4 py-3">Session Title</th><th class="px-4 py-3 text-right">Actions</th></tr>
+                <tr>
+                    <th class="px-2 py-3 whitespace-nowrap" colspan="2">
+                        <span id="selectAllWrap" class="hidden"><input type="checkbox" id="selectAllLive" onclick="toggleSelectAllLive(this)" class="w-4 h-4 cursor-pointer"></span>
+                        <span id="showUnusedWrap" class="inline-flex items-center gap-2">
+                            <input type="checkbox" id="showUnused" class="w-4 h-4 cursor-pointer">
+                            <label for="showUnused" class="cursor-pointer">Show Unused/Created</label>
+                        </span>
+                    </th>
+                    <th class="px-4 py-3">Session Title</th>
+                    <th class="px-4 py-3 text-right">Actions</th>
+                </tr>
             </thead>
             <tbody id="tableBody" class="divide-y divide-slate-100"></tbody>
         </table>
@@ -580,6 +594,9 @@ def index():
             endLabel.textContent   = armMode === 'end'   ? `End (${count})`   : 'End';
 
             cancelBtn.classList.toggle('hidden', armMode === null);
+
+            document.getElementById('selectAllWrap').classList.toggle('hidden', armMode === null);
+            document.getElementById('showUnusedWrap').classList.toggle('hidden', armMode !== null);
         }
 
         let prevStatusFilter = null; // status filter before arming, restored on cancel/completion
