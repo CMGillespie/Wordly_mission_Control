@@ -1,8 +1,10 @@
 # app_v3.py
-# Version: 3.1.4b - pending test: full pagination loop on /sessions, label/custom-field search
-#                    + truncated display, Split Transcript endpoint (WSS "split", confirmed
-#                    working via bystander connect), bulk select + Split/End toolbar,
-#                    simplified "asdf" confirm on End/Split
+# Version: 3.1.4c - pending test: localStorage (was sessionStorage — iOS was clearing it on
+#                    backgrounding) + date-check freshness, blocking API-key-entry gate,
+#                    Active/Inactive stat boxes as click filters (Live Only checkbox removed),
+#                    Alert Drops (visual banner + audio beep + Notification on unexpected
+#                    active->inactive transitions, suppressed for our own End actions),
+#                    "Ended <time>" timestamp on session rows (client-observed, ~30s accuracy)
 # Discovery: REST 1.11.0 | Termination: Endpoint Services 1.3
 
 import os, subprocess, json, asyncio, webbrowser, signal, sys
@@ -176,8 +178,8 @@ def index():
                 <input type="password" id="apiKey" placeholder="Wordly API Key" autocomplete="off" class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 shadow-inner text-base font-mono">
             </div>
         </div>
-        <div class="flex items-center gap-2 px-2"><input type="checkbox" id="filterActive" class="w-5 h-5 cursor-pointer"><label for="filterActive" class="text-sm font-black uppercase cursor-pointer">Live Only</label></div>
         <div class="flex items-center gap-2 px-2"><input type="checkbox" id="showUnused" class="w-5 h-5 cursor-pointer"><label for="showUnused" class="text-sm font-black uppercase cursor-pointer">Show Unused</label></div>
+        <div class="flex items-center gap-2 px-2"><input type="checkbox" id="alertDrops" class="w-5 h-5 cursor-pointer"><label for="alertDrops" class="text-sm font-black uppercase cursor-pointer">Alert Drops</label></div>
         <div class="flex items-center gap-2">
             <button id="btn-split" onclick="armOrFire('split')" class="flex items-center gap-1.5 border px-3 py-2 rounded-lg text-xs font-bold uppercase bg-white hover:bg-slate-50">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
@@ -194,14 +196,16 @@ def index():
             <button id="btn-cancel-mode" onclick="cancelMode()" class="hidden text-slate-500 hover:text-slate-800 px-2 text-lg font-black" title="Cancel">&times;</button>
         </div>
         <div class="flex gap-4 items-center ml-auto">
-            <div class="bg-green-50 border border-green-200 px-4 py-2 rounded-lg text-center"><span class="text-sm font-black text-green-700 uppercase">Active</span><p id="activeCount" class="text-3xl font-black text-green-900 leading-none">0</p></div>
-            <div class="bg-white border px-4 py-2 rounded-lg text-center"><span class="text-sm font-black text-slate-500 uppercase">Inactive</span><p id="inactiveCount" class="text-3xl font-black leading-none text-slate-900">0</p></div>
+            <div id="activeBox" onclick="toggleStatusFilter('active')" class="cursor-pointer bg-green-50 border border-green-200 px-4 py-2 rounded-lg text-center transition-all"><span class="text-sm font-black text-green-700 uppercase">Active</span><p id="activeCount" class="text-3xl font-black text-green-900 leading-none">0</p></div>
+            <div id="inactiveBox" onclick="toggleStatusFilter('inactive')" class="cursor-pointer bg-white border px-4 py-2 rounded-lg text-center transition-all"><span class="text-sm font-black text-slate-500 uppercase">Inactive</span><p id="inactiveCount" class="text-3xl font-black leading-none text-slate-900">0</p></div>
             <div class="flex flex-col items-center pl-4 border-l">
                 <span id="timerText" class="text-sm font-mono font-bold text-slate-400">SYNC: 30S</span>
                 <button onclick="manualRefresh()" class="bg-blue-600 text-white p-2 rounded-full shadow-md"><svg id="refreshIcon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
             </div>
         </div>
     </header>
+
+    <div id="dropBanner" class="hidden mb-3 bg-red-600 text-white rounded-xl p-3 space-y-1"></div>
 
     <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
         <table class="w-full text-left" id="sessionTable">
@@ -212,13 +216,43 @@ def index():
         </table>
     </div>
 
+    <div id="keyGate" class="hidden fixed inset-0 bg-slate-900/70 z-[100] flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+            <h2 class="text-xl font-black text-slate-900 mb-2">Enter your Wordly API key to get started</h2>
+            <p class="text-sm text-slate-500 mb-4">Required to load your sessions.</p>
+            <input type="password" id="keyGateInput" placeholder="Wordly API Key" autocomplete="off" class="w-full px-4 py-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-base font-mono mb-4">
+            <button onclick="submitKeyGate()" class="w-full bg-blue-600 text-white py-3 rounded-lg font-black uppercase hover:bg-blue-700">Continue</button>
+        </div>
+    </div>
+
     <script>
         let allSessions = [];
         let countdown = 30;
         let timerId = null;
 
+        // localStorage, not sessionStorage — iOS Safari/Chrome kill sessionStorage on
+        // backgrounding, which was forcing a repaste every time the tab lost focus.
         function getApiKey() {
-            return sessionStorage.getItem('wordlyApiKey') || '';
+            return localStorage.getItem('wordlyApiKey') || '';
+        }
+
+        function saveApiKey(key) {
+            localStorage.setItem('wordlyApiKey', key);
+            localStorage.setItem('wordlyApiKeyDate', new Date().toDateString());
+        }
+
+        function clearApiKey() {
+            localStorage.removeItem('wordlyApiKey');
+            localStorage.removeItem('wordlyApiKeyDate');
+        }
+
+        // Timers don't reliably fire on a backgrounded mobile tab overnight, so the
+        // real safety net is checking the stored date whenever the page loads/wakes.
+        function checkKeyFreshness() {
+            const savedDate = localStorage.getItem('wordlyApiKeyDate');
+            if (savedDate && savedDate !== new Date().toDateString()) {
+                clearApiKey();
+            }
         }
 
         function updateApiKeyDot() {
@@ -237,16 +271,42 @@ def index():
             }
         });
 
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) checkKeyFreshness(); });
+
         document.getElementById('apiKey').value = getApiKey();
         updateApiKeyDot();
         document.getElementById('apiKey').addEventListener('change', (e) => {
-            sessionStorage.setItem('wordlyApiKey', e.target.value.trim());
+            saveApiKey(e.target.value.trim());
             updateApiKeyDot();
             document.getElementById('apiKeyPopover').classList.add('hidden');
             fetchData();
         });
 
+        function checkKeyGate() {
+            if (!getApiKey()) {
+                document.getElementById('keyGate').classList.remove('hidden');
+                return true;
+            }
+            document.getElementById('keyGate').classList.add('hidden');
+            return false;
+        }
+
+        function submitKeyGate() {
+            const val = document.getElementById('keyGateInput').value.trim();
+            if (!val) return;
+            saveApiKey(val);
+            document.getElementById('apiKey').value = val;
+            updateApiKeyDot();
+            document.getElementById('keyGate').classList.add('hidden');
+            fetchData();
+        }
+
+        document.getElementById('keyGateInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submitKeyGate();
+        });
+
         async function fetchData() {
+            if (checkKeyGate()) return;
             const icon = document.getElementById('refreshIcon');
             const body = document.getElementById('tableBody');
             if(icon) icon.classList.add('refreshing');
@@ -256,15 +316,14 @@ def index():
                 const data = await res.json();
 
                 if (data.error === "MISSING_KEY") {
-                    body.innerHTML = `<tr><td colspan="4" class="p-10 text-center bg-red-50 text-red-600 font-bold border-2 border-red-200 rounded-xl text-lg">
-                        Enter your Wordly API key above to load sessions.
-                    </td></tr>`;
+                    document.getElementById('keyGate').classList.remove('hidden');
                     updateCounters(true);
                     if(icon) icon.classList.remove('refreshing');
                     return;
                 }
 
                 allSessions = data.sessions || [];
+                detectTransitions();
                 updateCounters(); render();
             } catch (e) {
                 console.error("Sync Error:", e);
@@ -275,7 +334,7 @@ def index():
 
         function logout() {
             if (!confirm("Log out and clear your saved API key?")) return;
-            sessionStorage.removeItem('wordlyApiKey');
+            clearApiKey();
             location.reload();
         }
 
@@ -284,7 +343,7 @@ def index():
             const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
             const msUntilMidnight = nextMidnight - now;
             setTimeout(() => {
-                sessionStorage.removeItem('wordlyApiKey');
+                clearApiKey();
                 location.reload();
             }, msUntilMidnight);
         }
@@ -304,6 +363,93 @@ def index():
 
         let selectedSessions = {}; // sessionId -> passcode, for bulk actions
         let armMode = null; // null | 'split' | 'end'
+        let statusFilter = null; // null | 'active' | 'inactive'
+
+        // Drop detection / end timestamps
+        let previousActiveIds = new Set();
+        let intentionalEndIds = new Set(); // sessions we ended ourselves — no false alarm
+        let endedTimestamps = {}; // sessionId -> Date first noticed non-active
+        let dropAlerts = []; // {id, title, at} unacknowledged
+        let audioCtx = null;
+
+        function toggleStatusFilter(which) {
+            statusFilter = (statusFilter === which) ? null : which;
+            render();
+        }
+
+        function updateStatusFilterUI() {
+            const activeBox = document.getElementById('activeBox');
+            const inactiveBox = document.getElementById('inactiveBox');
+            activeBox.classList.toggle('ring-2', statusFilter === 'active');
+            activeBox.classList.toggle('ring-green-500', statusFilter === 'active');
+            inactiveBox.classList.toggle('ring-2', statusFilter === 'inactive');
+            inactiveBox.classList.toggle('ring-slate-500', statusFilter === 'inactive');
+        }
+
+        function detectTransitions() {
+            const currentActiveIds = new Set(allSessions.filter(s => (s.state || "").toLowerCase() === 'started').map(s => s.sessionId));
+            const sessionById = {};
+            allSessions.forEach(s => { sessionById[s.sessionId] = s; });
+
+            previousActiveIds.forEach(id => {
+                if (currentActiveIds.has(id)) return; // still active, no transition
+                endedTimestamps[id] = new Date();
+                if (intentionalEndIds.has(id)) {
+                    intentionalEndIds.delete(id);
+                } else if (document.getElementById('alertDrops').checked) {
+                    triggerDropAlert(id, sessionById[id]);
+                }
+            });
+            previousActiveIds = currentActiveIds;
+        }
+
+        function triggerDropAlert(id, session) {
+            const title = session ? (session.title || id) : id;
+            dropAlerts.push({ id, title, at: new Date() });
+            renderDropBanner();
+            playDropSound();
+            if (window.Notification && Notification.permission === 'granted') {
+                try { new Notification('Wordly session dropped', { body: `${title} (${id}) is no longer live.` }); } catch(e) {}
+            }
+        }
+
+        function renderDropBanner() {
+            const el = document.getElementById('dropBanner');
+            if (!dropAlerts.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+            el.classList.remove('hidden');
+            el.innerHTML = dropAlerts.map((d, i) => `
+                <div class="flex items-center justify-between">
+                    <span class="font-black text-sm">⚠ DROPPED: ${d.title} (${d.id}) — ${d.at.toLocaleTimeString()}</span>
+                    <button onclick="ackDrop(${i})" class="bg-white/20 hover:bg-white/30 px-2 py-1 rounded text-xs font-bold uppercase">Acknowledge</button>
+                </div>`).join('');
+        }
+
+        function ackDrop(index) {
+            dropAlerts.splice(index, 1);
+            renderDropBanner();
+        }
+
+        function playDropSound() {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const o = audioCtx.createOscillator();
+                const g = audioCtx.createGain();
+                o.connect(g); g.connect(audioCtx.destination);
+                g.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                o.frequency.setValueAtTime(880, audioCtx.currentTime);
+                o.frequency.setValueAtTime(660, audioCtx.currentTime + 0.15);
+                g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+                o.start();
+                o.stop(audioCtx.currentTime + 0.6);
+            } catch(e) {}
+        }
+
+        document.getElementById('alertDrops').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {} }
+                if (window.Notification && Notification.permission === 'default') Notification.requestPermission();
+            }
+        });
 
         function labelText(s) {
             const parts = [];
@@ -317,7 +463,6 @@ def index():
         function render() {
             const body = document.getElementById('tableBody');
             const search = document.getElementById('search').value.toLowerCase();
-            const activeOnly = document.getElementById('filterActive').checked;
             const showUnused = document.getElementById('showUnused').checked;
 
             // Prune any selection whose session is no longer live (ended elsewhere,
@@ -333,7 +478,9 @@ def index():
                 const isLive = state === 'started';
                 const isCreated = state === 'created';
                 if (isCreated && !showUnused) return false;
-                return (activeOnly ? isLive : true) && (title.includes(search) || sid.includes(search) || labels.includes(search));
+                if (statusFilter === 'active' && !isLive) return false;
+                if (statusFilter === 'inactive' && isLive) return false;
+                return title.includes(search) || sid.includes(search) || labels.includes(search);
             });
             filtered.sort((a, b) => {
                 const aCreated = (a.state || "").toLowerCase() === 'created' ? 1 : 0;
@@ -350,6 +497,7 @@ def index():
                 const full = labelText(s);
                 const truncated = full.length > 42 ? full.slice(0, 42) + '…' : full;
                 const labelRow = full ? `<div class="text-xs text-slate-500 mt-1 cursor-pointer" onclick="toggleLabel(this)" data-full="${full.replace(/"/g,'&quot;')}" data-expanded="false">${truncated}</div>` : '';
+                const endedAt = (!isLive && endedTimestamps[s.sessionId]) ? `<div class="text-xs text-slate-400 mt-1">Ended ${endedTimestamps[s.sessionId].toLocaleTimeString()}</div>` : '';
                 const isChecked = selectedSessions[s.sessionId] ? 'checked' : '';
                 const row = `
                     <tr class="${isLive ? 'active-row' : ''}">
@@ -365,6 +513,7 @@ def index():
                             <div class="font-bold text-lg text-slate-900">${s.title || 'Untitled'}</div>
                             <div class="text-sm text-blue-600 font-mono mt-1 uppercase tracking-tight">ID: ${s.sessionId} | PASS: ${s.passcode}</div>
                             ${labelRow}
+                            ${endedAt}
                         </td>
                         <td class="px-4 py-4 text-right whitespace-nowrap">
                             <a href="https://attend.wordly.ai/enter/${s.sessionId}" target="_blank" class="text-blue-600 text-sm font-black uppercase tracking-tighter hover:underline">Attend</a>
@@ -375,6 +524,7 @@ def index():
                 body.insertAdjacentHTML('beforeend', row);
             });
             updateModeUI();
+            updateStatusFilterUI();
         }
 
         function toggleLabel(el) {
@@ -396,6 +546,7 @@ def index():
 
         async function endSession(id, pass) {
             if (!confirmAction(`End the live session ${id} for everyone?`)) return;
+            intentionalEndIds.add(id);
             await fetch("/api/sessions/end/" + id + "?passcode=" + pass, { method: "POST" });
             fetchData();
         }
@@ -431,20 +582,20 @@ def index():
             cancelBtn.classList.toggle('hidden', armMode === null);
         }
 
-        let prevLiveOnly = false; // Live Only state before arming, restored on cancel/completion
+        let prevStatusFilter = null; // status filter before arming, restored on cancel/completion
 
         function cancelMode() {
             armMode = null;
             selectedSessions = {};
-            document.getElementById('filterActive').checked = prevLiveOnly;
+            statusFilter = prevStatusFilter;
             render();
         }
 
         async function armOrFire(mode) {
             if (armMode === null) {
                 armMode = mode;
-                prevLiveOnly = document.getElementById('filterActive').checked;
-                document.getElementById('filterActive').checked = true;
+                prevStatusFilter = statusFilter;
+                statusFilter = 'active';
                 render();
                 return;
             }
@@ -456,12 +607,13 @@ def index():
             const verb = mode === 'split' ? `Split the transcript for ${ids.length} session(s)?` : `End ${ids.length} session(s) for everyone?`;
             if (!confirmAction(verb)) return;
 
+            if (mode === 'end') ids.forEach(id => intentionalEndIds.add(id));
             for (const id of ids) {
                 await fetch(`/api/sessions/${mode}/${id}?passcode=${selectedSessions[id]}`, { method: 'POST' });
             }
             armMode = null;
             selectedSessions = {};
-            document.getElementById('filterActive').checked = prevLiveOnly;
+            statusFilter = prevStatusFilter;
             fetchData();
         }
 
@@ -475,8 +627,8 @@ def index():
 
         function manualRefresh() { fetchData(); startTimer(); }
         document.getElementById('search').addEventListener('input', render);
-        document.getElementById('filterActive').addEventListener('change', render);
         document.getElementById('showUnused').addEventListener('change', render);
+        checkKeyFreshness();
         fetchData(); startTimer(); scheduleMidnightClear();
     </script>
 </body>
