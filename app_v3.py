@@ -532,6 +532,7 @@ def index():
                         <td class="px-4 py-4 text-right whitespace-nowrap">
                             <a href="https://attend.wordly.ai/enter/${s.sessionId}" target="_blank" class="text-blue-600 text-sm font-black uppercase tracking-tighter hover:underline">Attend</a>
                             <a href="https://join.wordly.ai/enter/${s.sessionId}?key=${s.passcode}" target="_blank" class="bg-slate-900 text-white px-2 py-1.5 rounded text-sm font-black uppercase tracking-tighter hover:bg-blue-600 ml-3">Present</a>
+                            ${isLive ? `<button onclick="splitSession('${s.sessionId}', '${s.passcode}')" class="border-2 border-blue-600 text-blue-600 px-2 py-1 rounded text-sm font-black uppercase ml-3 hover:bg-blue-600 hover:text-white transition-all">Split</button>` : ''}
                             ${isLive ? `<button onclick="endSession('${s.sessionId}', '${s.passcode}')" class="border-2 border-red-600 text-red-600 px-2 py-1 rounded text-sm font-black uppercase ml-3 hover:bg-red-600 hover:text-white transition-all">End Session</button>` : ''}
                         </td>
                     </tr>`;
@@ -562,6 +563,12 @@ def index():
             if (!confirmAction(`End the live session ${id} for everyone?`)) return;
             intentionalEndIds.add(id);
             await fetch("/api/sessions/end/" + id + "?passcode=" + pass, { method: "POST" });
+            fetchData();
+        }
+
+        async function splitSession(id, pass) {
+            if (!confirmAction(`Split the transcript for ${id}?`)) return;
+            await fetch("/api/sessions/split/" + id + "?passcode=" + pass, { method: "POST" });
             fetchData();
         }
 
