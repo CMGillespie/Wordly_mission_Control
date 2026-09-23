@@ -555,8 +555,7 @@ def index():
         }
 
         function confirmAction(promptText) {
-            const check = prompt(promptText + ' Type "asdf" to confirm:');
-            return (check || '').trim().toLowerCase() === 'asdf';
+            return confirm(promptText);
         }
 
         async function endSession(id, pass) {
