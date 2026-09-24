@@ -217,10 +217,7 @@ def index():
                 <tr>
                     <th class="px-2 py-3 whitespace-nowrap" colspan="2">
                         <span id="selectAllWrap" class="hidden"><input type="checkbox" id="selectAllLive" onclick="toggleSelectAllLive(this)" class="w-4 h-4 cursor-pointer"></span>
-                        <span id="showUnusedWrap" class="inline-flex items-center gap-2">
-                            <input type="checkbox" id="showUnused" class="w-4 h-4 cursor-pointer">
-                            <label for="showUnused" class="cursor-pointer">Show Unused/Created</label>
-                        </span>
+                        <span id="statusHeaderLabel">Status</span>
                     </th>
                     <th class="px-4 py-3">Session Title</th>
                     <th class="px-4 py-3 text-right">Actions</th>
@@ -477,7 +474,6 @@ def index():
         function render() {
             const body = document.getElementById('tableBody');
             const search = document.getElementById('search').value.toLowerCase();
-            const showUnused = document.getElementById('showUnused').checked;
 
             // Prune any selection whose session is no longer live (ended elsewhere,
             // via the per-row button, the portal, etc.)
@@ -491,7 +487,7 @@ def index():
                 const state = (s.state || "").toLowerCase();
                 const isLive = state === 'started';
                 const isCreated = state === 'created';
-                if (isCreated && !showUnused) return false;
+                if (isCreated) return false;
                 if (statusFilter === 'active' && !isLive) return false;
                 if (statusFilter === 'inactive' && isLive) return false;
                 return title.includes(search) || sid.includes(search) || labels.includes(search);
@@ -602,7 +598,7 @@ def index():
             cancelBtn.classList.toggle('hidden', armMode === null);
 
             document.getElementById('selectAllWrap').classList.toggle('hidden', armMode === null);
-            document.getElementById('showUnusedWrap').classList.toggle('hidden', armMode !== null);
+            document.getElementById('statusHeaderLabel').classList.toggle('hidden', armMode !== null);
         }
 
         let prevStatusFilter = null; // status filter before arming, restored on cancel/completion
@@ -650,7 +646,6 @@ def index():
 
         function manualRefresh() { fetchData(); startTimer(); }
         document.getElementById('search').addEventListener('input', render);
-        document.getElementById('showUnused').addEventListener('change', render);
         checkKeyFreshness();
         fetchData(); startTimer(); scheduleMidnightClear();
     </script>
